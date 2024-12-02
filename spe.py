@@ -31,11 +31,11 @@ def simulate_interaction(turns=10):
 
         # Generate guard's response
         guard_response = generate_response(prisoner_prompt, "prison guard")
-        print(f"Guard: {guard_response}")
+        print(f"Prisoner: {guard_response}")
 
         # Generate prisoner's response
         prisoner_response = generate_response(guard_response, "prisoner")
-        print(f"Prisoner: {prisoner_response}")
+        print(f"Guard: {prisoner_response}")
 
 # Run the simulation
 simulate_interaction()
