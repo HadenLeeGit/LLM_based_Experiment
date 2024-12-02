@@ -3,7 +3,7 @@ import openai
 from persona import generate_persona
 
 # Set your OpenAI API key here
-openai.api_key = 'your-api-key'
+openai.api_key = 'api-key'
 
 def generate_response(prompt, role, persona):
     """
@@ -36,17 +36,21 @@ def simulate_interaction(turns=10):
 
     guard_prompt = "You are a guard maintaining order. What do you say?"
     prisoner_prompt = "You are a prisoner responding to the guard. What do you say?"
+    
+    # print personas
+    print("Guard Persona:", guard_persona)
+    print("Prisoner Persona:", prisoner_persona)
 
     for turn in range(turns):
         print(f"Turn {turn + 1}:")
 
-        # Generate guard's response
-        guard_response = generate_response(prisoner_prompt, "prison guard", guard_persona)
-        print(f"Guard: {guard_response}")
-
         # Generate prisoner's response
+        guard_response = generate_response(prisoner_prompt, "prison guard", guard_persona)
+        print(f"Prisoner: {guard_response}")
+
+        # Generate guard's response
         prisoner_response = generate_response(guard_response, "prisoner", prisoner_persona)
-        print(f"Prisoner: {prisoner_response}")
+        print(f"Guard: {prisoner_response}")
 
 # Run the simulation
 simulate_interaction()
