@@ -40,7 +40,6 @@ Prisoner: I don't have time for your attitude, guard. Just do your job and let u
 Guard: I understand your frustration, but please remember that I am here to ensure the safety and security of everyone in this facility, including you. Let's try to maintain a positive and respectful attitude towards each other.
 
 TEST 2:
-
 Guard Persona: {'temperament': 'calm', 'assertiveness': 'high', 'empathy': 'medium', 'compliance': 'high'}
 Prisoner Persona: {'temperament': 'confident', 'assertiveness': 'medium', 'empathy': 'low', 'compliance': 'low'}
 Turn 1:
