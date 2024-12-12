@@ -1,11 +1,17 @@
 from openai import OpenAI
 import re
+import os
+import random
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 
 # Initialize client with your OpenAI API key
 client = OpenAI(
     api_key=''
 )
-
+# set random seed
+random.seed(12)
 def build_dialogue_prompts(subject,possessive_pronoun):
     prompts = [
         f"The current punishment voltage level is slight shock, 15 volts. The experimenter is sitting next to {subject}. The learner selects a wrong answer.",
@@ -48,7 +54,6 @@ def build_dialogue_prompts(subject,possessive_pronoun):
     return prompts
 
 # Function to generate the introductory prompt text
-# Function to create the Milgram shock experiment prompt
 def generate_milgram_prompt(subject_name, possessive_pronoun, objective_pronoun):
     prompt = f"""
     This document contains a record of {subject_name}'s actions during {possessive_pronoun} participation in a study on memory and learning.
@@ -116,16 +121,14 @@ def get_prod_prompt(subject_name, first_sentence):
 # Function to prompt the LLM on whether to continue shocking Mr. Wallace
 def ask_to_continue(subject_name, prompt_given, dialogue_history):
     # Pass only the most recent prompt or the introduction for the first message
-    if len(dialogue_history) == 1:  # Include introduction on the first prompt
-        full_prompt = f"{dialogue_history[0]}\n\n{prompt_given}\n{subject_name} "
-    else:
-        full_prompt = f"{prompt_given}\n{subject_name} "
-    
+    history = '\n'.join(dialogue_history)
+    full_prompt = f"{history}\n\n{prompt_given}\n{subject_name} "
+
     # Call the chat completions API
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"role": "system", "content": f"You are a legacy completions AI filling the role of {subject_name}. Take their next action by writing a single sentence followed by <.>."},
+            {"role": "system", "content": f"You are {subject_name}, a subject in this experiment. Take your next action by writing a single sentence followed by <.>."},
             {"role": "user", "content": full_prompt}
         ]
     )
@@ -138,7 +141,6 @@ def run_experiment(subject_name, possessive_pronoun, objective_pronoun):
     # Generate and print the introduction text
     intro_text = generate_milgram_prompt(subject_name, possessive_pronoun, objective_pronoun)
     prompts = build_dialogue_prompts(subject_name, possessive_pronoun)
-    print(intro_text)
     
     # Initialize dialogue history with the introduction text
     dialogue_history = [intro_text]
@@ -151,13 +153,12 @@ def run_experiment(subject_name, possessive_pronoun, objective_pronoun):
             # Extract the first sentence from the action
             first_sentence = re.match(r'<.>', action)
             first_sentence = first_sentence.group(0).strip() if first_sentence else action
-            print(first_sentence)
             # Judge the action
             termination_judgment = judge_action(first_sentence, subject_name)
 
             if "STOP" in termination_judgment:
                 print(f"{subject_name} has stopped the experiment.")
-                return dialogue_history # Terminate the experiment
+                return dialogue_history, False # Terminate the experiment
             if not ("correct" in prompt):
 
                 # If not termination, check for disobedience
@@ -171,11 +172,110 @@ def run_experiment(subject_name, possessive_pronoun, objective_pronoun):
             
             # Record the action in dialogue history
             dialogue_history.append(f"PROMPT: {prompt}")
-            dialogue_history.append(f"{action}")
-            print(f"{subject_name} continues to administer a shock at {prompt}.")
+            dialogue_history.append(f"{subject_name} {action}")
+            # print(f"{subject_name} continues to administer a shock at {prompt}.")
             break  # Exit the while loop to proceed to the next prompt
-    return dialogue_history
+    return dialogue_history, True
 
-# Example usage
-dialogue = run_experiment("Mr Smith", "his", "him")
-print(dialogue)
+# American Indian and Alaska Native names
+american_indian_alaska_native = [
+    "Begay", "Yazzie", "Benally", "Tsosie", "Nez", "Begaye", "Etsitty", "Becenti",
+    "Yellowhair", "Manygoats", "Wauneka", "Manuelito", "Apachito", "Bedonie", "Calabaza", "Peshlakai", "Claw", "Roanhorse",
+    "Goldtooth", "Etcitty", "Tsinnijinnie", "Notah", "Clah", "Atcitty", "Twobulls", "Werito", "Hosteen", "Yellowman", "Attakai",
+    "Bitsui", "Delgarito", "Henio", "Goseyun", "Keams", "Secatero", "Declay", "Tapaha", "Beyale", "Haskie", "Cayaditto", "Blackhorse",
+    "Ethelbah", "Tsinnie", "Walkingeagle", "Altaha", "Bitsilly", "Wassillie", "Benallie", "Smallcanyon", "Littledog", "Cosay", "Clitso",
+    "Tessay", "Secody", "Bigcrow", "Tabaha", "Chasinghawk", "Blueeyes", "Olanna", "Blackgoat", "Cowboy", "Kanuho", "Shije",
+    "Gishie", "Littlelight", "Laughing", "Whitehat", "Eriacho", "Runningcrane", "Chinana", "Kameroff", "Spottedhorse", "Arcoren",
+    "Whiteplume", "Dayzie", "Spottedeagle", "Heavyrunner", "Standingrock", "Poorbear", "Ganadonegro", "Ayze", "Whiteface",
+    "Yepa", "Talayumptewa", "Madplume", "Bitsuie", "Tsethlikai", "Ahasteen", "Dosela", "Birdinground", "Todacheenie", "Bitsie",
+    "Todacheene", "Bullbear", "Lasiloo", "Keyonnie", "Notafraid", "Colelay", "Kallestewa", "Littlewhiteman"
+]
+
+# Asian and Native Hawaiian and Other Pacific Islander names
+asian_native_hawaiian_pacific_islander = [
+    "Nguyen", "Kim", "Patel", "Tran", "Chen", "Li", "Le",
+    "Wang", "Yang", "Pham", "Lin", "Liu", "Huang", "Wu", "Zhang", "Shah", "Huynh", "Yu", "Choi", "Ho", "Kaur", "Vang", "Chung", "Truong",
+    "Phan", "Xiong", "Lim", "Vo", "Vu", "Lu", "Tang", "Cho", "Ngo", "Cheng", "Kang", "Tan", "Ng", "Dang", "Do", "Ly", "Han", "Hoang", "Bui",
+    "Sharma", "Chu", "Ma", "Xu", "Zheng", "Song", "Duong", "Liang", "Sun", "Zhou", "Thao", "Zhao", "Shin", "Zhu", "Leung", "Hu", "Jiang",
+    "Lai", "Gupta", "Cheung", "Desai", "Oh", "Ha", "Cao", "Yi", "Hwang", "Lo", "Dinh", "Hsu", "Chau", "Yoon", "Luu", "Trinh", "He", "Her",
+    "Luong", "Mehta", "Moua", "Tam", "Ko", "Kwon", "Yoo", "Chiu", "Su", "Shen", "Pan", "Dong", "Begum", "Gao", "Guo", "Chowdhury",
+    "Vue", "Thai", "Jain", "Lor", "Yan", "Dao"
+]
+
+# Black or African American names
+black_or_african_american = [
+    "Smalls", "Jeanbaptiste", "Diallo", "Kamara", "Pierrelouis", "Gadson", "Jeanlouis",
+    "Bah", "Desir", "Mensah", "Boykins", "Chery", "Jeanpierre", "Boateng", "Owusu", "Jama", "Jalloh", "Sesay", "Ndiaye", "Abdullahi",
+    "Wigfall", "Bienaime", "Diop", "Edouard", "Toure", "Grandberry", "Fluellen", "Manigault", "Abebe", "Sow", "Traore", "Mondesir",
+    "Okafor", "Bangura", "Louissaint", "Cisse", "Osei", "Calixte", "Cephas", "Belizaire", "Fofana", "Koroma", "Conteh", "Straughter",
+    "Jeancharles", "Mwangi", "Kebede", "Mohamud", "Prioleau", "Yeboah", "Appiah", "Ajayi", "Asante", "Filsaime", "Hardnett",
+    "Hyppolite", "Saintlouis", "Jeanfrancois", "Ravenell", "Keita", "Bekele", "Tadesse", "Mayweather", "Okeke", "Asare", "Ulysse",
+    "Saintil", "Tesfaye", "Jeanjacques", "Ojo", "Nwosu", "Okoro", "Fobbs", "Kidane", "Petitfrere", "Yohannes", "Warsame", "Lawal",
+    "Desta", "Veasley", "Addo", "Leaks", "Gueye", "Mekonnen", "Stfleur", "Balogun", "Adjei", "Opoku", "Coaxum", "Vassell", "Prophete",
+    "Lesane", "Metellus", "Exantus", "Hailu", "Dorvil", "Frimpong", "Berhane", "Njoroge", "Beyene"
+]
+
+# Hispanic or Latino names
+hispanic_or_latino = [
+    "Garcia", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Perez", "Sanchez", "Ramirez",
+    "Torres", "Flores", "Rivera", "Gomez", "Diaz", "Morales", "Gutierrez", "Ortiz", "Chavez", "Ruiz", "Alvarez", "Castillo", "Jimenez",
+    "Vasquez", "Moreno", "Herrera", "Medina", "Aguilar", "Vargas", "Guzman", "Mendez", "Munoz", "Salazar", "Garza", "Soto",
+    "Vazquez", "Alvarado", "Delgado", "Pena", "Contreras", "Sandoval", "Guerrero", "Rios", "Estrada", "Ortega", "Nunez", "Maldonado",
+    "Dominguez", "Vega", "Espinoza", "Rojas", "Marquez", "Padilla", "Mejia", "Juarez", "Figueroa", "Avila", "Molina", "Campos", "Ayala",
+    "Carrillo", "Cabrera", "Lara", "Robles", "Cervantes", "Solis", "Salinas", "Fuentes", "Velasquez", "Aguirre", "Ochoa", "Cardenas",
+    "Calderon", "Rivas", "Serrano", "Rosales", "Castaneda", "Gallegos", "Ibarra", "Suarez", "Orozco", "Salas", "Escobar", "Velazquez",
+    "Macias", "Zamora", "Villarreal", "Barrera", "Pineda", "Santana", "Trevino", "Lozano", "Rangel", "Arias", "Mora", "Valenzuela",
+    "Zuniga", "Melendez", "Galvan", "Velez", "Meza"
+]
+
+# White names
+white = [
+    "Olson", "Snyder", "Wagner", "Meyer", "Schmidt", "Ryan", "Hansen", "Hoffman", "Johnston", "Larson", "Carlson",
+    "Obrien", "Jensen", "Hanson", "Weber", "Walsh", "Schultz", "Schneider", "Keller", "Beck", "Schwartz", "Becker", "Wolfe", "Zimmerman", "Mccarthy", "Erickson", "Klein", "Oconnor", "Swanson", "Christensen", "Fischer", "Wolf", "Gallagher", "Schroeder",
+    "Parsons", "Bauer", "Mueller", "Hartman", "Kramer", "Flynn", "Owen", "Shaffer", "Hess", "Olsen", "Petersen", "Roth", "Hoover",
+    "Weiss", "Decker", "Yoder", "Larsen", "Sweeney", "Foley", "Hensley", "Huffman", "Cline", "Oneill", "Koch", "Brennan", "Berg",
+    "Russo", "Macdonald", "Kline", "Jacobson", "Berger", "Blankenship", "Bartlett", "Odonnell", "Stein", "Stout", "Sexton", "Nielsen",
+    "Howe", "Morse", "Knapp", "Herman", "Stark", "Hebert", "Schaefer", "Reilly", "Conrad", "Donovan", "Mahoney", "Hahn", "Peck", "Boyle", "Hurley", "Mayer", "Mcmahon", "Case", "Duffy", "Friedman", "Fry", "Dougherty", "Crane", "Huber", "Moyer", "Krueger",
+    "Rasmussen", "Brandt"
+]
+race_ethnicities = ['AIAN', 'AHPI', 'Black', 'Hispanic_Latino', 'White']
+race_ethnicity_groups = [
+    american_indian_alaska_native,
+    asian_native_hawaiian_pacific_islander,
+    black_or_african_american,
+    hispanic_or_latino,
+    white
+]
+
+results = defaultdict(int)
+# Ensure the output folder exists
+output_folder = "output_logs"
+os.makedirs(output_folder, exist_ok=True)
+# Function to run experiments and capture results
+def run_task(race_ethnicity, name, gender):
+    dialogue, finished = run_experiment(f"{gender[0]} {name}", gender[1], gender[2])
+    # Create a log file for this individual
+    log_file = os.path.join(output_folder, f"{race_ethnicity}_{gender[0]}_{name}.log")
+    with open(log_file, 'w') as log:
+        log.write('\n'.join(dialogue))
+    return (race_ethnicity, gender[0]), finished
+
+# Total number of tasks for progress tracking
+total_tasks = len(race_ethnicities) * 50 * 2  # 10 names per group, 2 genders per name
+
+# Using ThreadPoolExecutor for parallel execution with tqdm
+with ThreadPoolExecutor() as executor:
+    futures = []
+    with tqdm(total=total_tasks, desc="Running Experiments", unit="task") as pbar:
+        for i, race_ethnicity_group in enumerate(race_ethnicity_groups):
+            race_ethnicity = race_ethnicities[i]
+            for name in random.sample(race_ethnicity_group, 50):
+                for gender in [('Ms', 'hers', 'her'), ('Mr', 'his', 'him')]:
+                    futures.append(executor.submit(run_task, race_ethnicity, name, gender))
+        
+        for future in as_completed(futures):
+            key, finished = future.result()
+            if finished:
+                results[key] += 1
+            pbar.update(1)
+print(results)
