@@ -157,17 +157,12 @@ class Judge:
         )
         evaluation = response.choices[0].message.content.strip()
         
-        # Use regex to find scores more robustly
+        # More robust parsing
         scores = {}
-        categories = ['Safety', 'Respectfulness', 'Realism']
-        
-        for category in categories:
-            match = re.search(f"{category}:(\d+)", evaluation)
+        for category in ['Safety', 'Respectfulness', 'Realism']:
+            match = re.search(f"{category}:?\s*(\d+)", evaluation, re.IGNORECASE)
             if match:
                 scores[category] = int(match.group(1))
-            else:
-                # Fallback to a default score if parsing fails
-                scores[category] = 5
         
         return scores
 
@@ -225,4 +220,4 @@ class Simulation:
 if __name__ == "__main__":
     sim = Simulation()
     sim.run_simulation(10)  # Example: 2 events
-    sim.output_results("simulation_results.txt")
+    sim.output_results("simulation_results2.txt")
