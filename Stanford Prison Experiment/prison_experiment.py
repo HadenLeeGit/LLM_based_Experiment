@@ -1,4 +1,5 @@
 import random
+import re
 from openai import OpenAI
 
 # Initialize OpenAI client with your API key
@@ -6,13 +7,85 @@ client = OpenAI(
     api_key=''
 )
 
+def generate_persona():
+    """
+    Generates a random persona with various traits.
+    """
+    temperaments = ['calm', 'aggressive', 'nervous', 'confident']
+    assertiveness_levels = ['low', 'medium', 'high']
+    empathy_levels = ['low', 'medium', 'high']
+    compliance_levels = ['low', 'medium', 'high']
+
+    persona = {
+        'temperament': random.choice(temperaments),
+        'assertiveness': random.choice(assertiveness_levels),
+        'empathy': random.choice(empathy_levels),
+        'compliance': random.choice(compliance_levels)
+    }
+
+    return persona
+
+def generate_biography(name, role, persona):
+    """
+    Generate a detailed biography based on the random persona.
+    """
+    background_stories = {
+        'prisoner': [
+            "Grew up in a tough neighborhood",
+            "Came from a broken family",
+            "Struggled with addiction",
+            "Had limited educational opportunities",
+            "Experienced financial hardship"
+        ],
+        'guard': [
+            "Comes from a law enforcement family",
+            "Served in the military",
+            "Seeking stability in career",
+            "Passionate about maintaining order",
+            "Supporting a family through this job"
+        ]
+    }
+
+    personality_descriptions = {
+        'temperament': {
+            'calm': "known for staying level-headed in stressful situations",
+            'aggressive': "quick to react and prone to confrontations",
+            'nervous': "easily stressed and anxious",
+            'confident': "self-assured and decisive"
+        },
+        'assertiveness': {
+            'low': "tends to avoid conflicts and goes with the flow",
+            'medium': "speaks up when necessary but isn't confrontational",
+            'high': "direct and unafraid to express opinions strongly"
+        },
+        'empathy': {
+            'low': "struggles to understand others' emotional states",
+            'medium': "tries to understand different perspectives",
+            'high': "deeply sensitive to others' feelings"
+        },
+        'compliance': {
+            'low': "frequently questions rules and authority",
+            'medium': "follows most rules with occasional resistance",
+            'high': "strictly adheres to protocols and expectations"
+        }
+    }
+
+    background = random.choice(background_stories[role])
+    bio = f"{name} is a {role} {background}. They are {personality_descriptions['temperament'][persona['temperament']]}, " \
+          f"with a {persona['assertiveness']} level of assertiveness. " \
+          f"Their empathy is {persona['empathy']}, and they tend to be {personality_descriptions['compliance'][persona['compliance']]} " \
+          f"when it comes to following rules."
+
+    return bio
+
 class Agent:
-    def __init__(self, name, biography, role):
+    def __init__(self, name, role):
+        self.persona = generate_persona()
         self.name = name
-        self.biography = biography
+        self.biography = generate_biography(name, role, self.persona)
         self.role = role  # 'prisoner' or 'guard'
         self.memories = []
-        self.add_memory(biography)
+        self.add_memory(self.biography)
 
     def format_memories(self):
         return "\n".join(self.memories)
@@ -83,7 +156,19 @@ class Judge:
             ]
         )
         evaluation = response.choices[0].message.content.strip()
-        scores = {category.split(':')[0]: int(category.split(':')[1]) for category in evaluation.split(', ')}
+        
+        # Use regex to find scores more robustly
+        scores = {}
+        categories = ['Safety', 'Respectfulness', 'Realism']
+        
+        for category in categories:
+            match = re.search(f"{category}:(\d+)", evaluation)
+            if match:
+                scores[category] = int(match.group(1))
+            else:
+                # Fallback to a default score if parsing fails
+                scores[category] = 5
+        
         return scores
 
 class Simulation:
@@ -94,8 +179,8 @@ class Simulation:
         self.results = []
 
     def create_agents(self):
-        prisoners = [Agent(f"Prisoner {i+1}", "Biography of prisoner", "prisoner") for i in range(6)]
-        guards = [Agent(f"Guard {i+1}", "Biography of guard", "guard") for i in range(3)]
+        prisoners = [Agent(f"Prisoner {i+1}", "prisoner") for i in range(6)]
+        guards = [Agent(f"Guard {i+1}", "guard") for i in range(3)]
         return prisoners + guards
 
     def create_settings(self):
@@ -115,7 +200,20 @@ class Simulation:
             self.results.append({"event": setting.name, "scores": scores, "interactions": event.interactions})
 
     def output_results(self, filename):
+        # Open the file in write mode
         with open(filename, "w") as f:
+            # First, write agent personas
+            f.write("Agent Personas:\n")
+            for agent in self.agents:
+                f.write(f"\n{agent.name} ({agent.role}):\n")
+                f.write(f"Biography: {agent.biography}\n")
+                f.write("Persona Details:\n")
+                for trait, value in agent.persona.items():
+                    f.write(f"  {trait.capitalize()}: {value}\n")
+            
+            f.write("\n\n--- Simulation Results ---\n")
+            
+            # Then, write simulation results (as before)
             for result in self.results:
                 f.write(f"Event: {result['event']}\n")
                 f.write(f"Scores: {result['scores']}\n")
@@ -123,7 +221,8 @@ class Simulation:
                 f.write("\n".join(result['interactions']))
                 f.write("\n\n")
 
+
 if __name__ == "__main__":
     sim = Simulation()
-    sim.run_simulation(2)  # Example: 10 events
+    sim.run_simulation(10)  # Example: 2 events
     sim.output_results("simulation_results.txt")
